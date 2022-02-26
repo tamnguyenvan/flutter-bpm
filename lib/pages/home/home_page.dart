@@ -129,12 +129,13 @@ import 'package:camera/camera.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_with_mediapipe/constants/model.dart';
 import 'package:flutter_with_mediapipe/pages/success/success_view.dart';
+import 'package:flutter_with_mediapipe/services/face_detection/face_detection_service.dart';
 import 'package:flutter_with_mediapipe/services/model_inference_service.dart';
 import 'package:flutter_with_mediapipe/services/service_locator.dart';
 import 'package:flutter_with_mediapipe/utils/bpm_calculator.dart';
 import 'package:flutter_with_mediapipe/utils/face_utils.dart';
 import 'package:flutter_with_mediapipe/utils/isolate_utils.dart';
-import 'package:image/image.dart' as imglib;
+import 'package:image/image.dart' as image_lib;
 import 'package:timer_count_down/timer_count_down.dart';
 
 import 'widgets/index_box.dart';
@@ -173,11 +174,16 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
   bool _draw = false;
 
   // Face detection
+  var numEliminateFirstFrame = 20;
   late IsolateUtils _isolateUtils;
   late ModelInferenceService _modelInferenceService;
   late BpmModelInferenceService _bpmModelInferenceService;
   late RawInputBuffer _rawInputBuffer;
   late MovingAverage _avg;
+
+  // For debug
+  late image_lib.JpegEncoder _encoder;
+  image_lib.Image? _avatar;
 
   // BPM
   double _bpm = 0.0;
@@ -190,6 +196,7 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
     _bpmModelInferenceService = locator<BpmModelInferenceService>();
     _rawInputBuffer = RawInputBuffer(bufferSize: FaceDetectionParam.bufferSize);
     _avg = MovingAverage();
+    _encoder = image_lib.JpegEncoder();
     _initStateAsync();
     super.initState();
   }
@@ -197,7 +204,7 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
   void _initStateAsync() async {
     _isolateUtils = IsolateUtils();
     await _isolateUtils.initIsolate();
-    locator<ModelInferenceService>().setModelConfig(0);
+    locator<ModelInferenceService>().setModelConfig();
     locator<BpmModelInferenceService>().setModelConfig();
     await _initCamera();
     _predicting = false;
@@ -292,7 +299,7 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
     //         context: context),
     return Scaffold(
       body: Stack(
-        fit: StackFit.expand,
+        // fit: StackFit.expand,
         children: [
           Transform.scale(
             scale: scale,
@@ -300,6 +307,7 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
               child: CameraPreview(_cameraController!),
             ),
           ),
+          // CameraPreview(_cameraController!),
           _buildInfoBoard(),
           // InfoBoard(
           //   bpm: _bpm,
@@ -326,6 +334,14 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
           cameraImage,
           now,
         );
+
+        // At the beginning, some frames seems too bright. That might affect
+        // the accuracy so we want to eliminate those frames.
+        if (_rawInputBuffer.buffer.isNotEmpty && numEliminateFirstFrame > 0) {
+          print('============ Eliminating a frame');
+          _rawInputBuffer.buffer.removeFirst();
+          numEliminateFirstFrame--;
+        }
       }
 
       if (_rawInputBuffer.ready) {
@@ -339,44 +355,59 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
         final params = {
           'cameraImages': cameraImages,
           'detectorAddress': _modelInferenceService.model.getAddress,
+          // 'imageRotation': _cameraDescription.sensorOrientation,
+          // 'dir': _cameraDescription.lensDirection,
         };
+        // isolates.spawn(
+        //   runFaceDetector,
+        //   name: 'face_detector',
+        //   onReceive: calcBpm,
+        //   onInitialized: () => isolates.send(params, to: 'face_detector'),
+        // );
         await _modelInferenceService.inference(
           isolateUtils: _isolateUtils,
           // cameraImages: cameraImages,
           params: params,
         );
         final faces = _modelInferenceService.inferenceResults;
-        print('========== Number of faces: ${faces!.length}');
-        print('============ Stop detecting faces');
-
-        print('============ Start calculating bpm');
-        // Calculate real fps
-        final fps = 1000 *
-            _rawInputBuffer.length /
-            (_rawInputBuffer.buffer.last.timestamp -
-                _rawInputBuffer.buffer.first.timestamp);
-        print('============ FPS: $fps');
-        final bpmParams = {
-          'inputs': faces,
-          'fps': fps,
-          'bpmCalculatorAddress': _bpmModelInferenceService.model.getAddress,
-        };
-        await _bpmModelInferenceService.inference(
-          isolateUtils: _isolateUtils,
-          params: bpmParams,
-        );
-        final bpmResults = _bpmModelInferenceService.bpmResults;
-        print('============ bpm: $bpmResults');
-        if (bpmResults != null) {
-          _avg.update(bpmResults);
+        if (faces != null) {
+          // Debug with an avatar
           setState(() {
-            _bpm = _avg.bpm;
-            _hrv = _avg.hrv;
-            _si = _avg.si;
+            _avatar =
+                image_lib.copyResize(faces[0].image, width: 36, height: 36);
           });
-        }
-        print('============ Stop calculating bpm');
 
+          print('========== Number of faces: ${faces.length}');
+          print('============ Stop detecting faces');
+
+          print('============ Start calculating bpm');
+          // Calculate real fps
+          final fps = 1000 *
+              _rawInputBuffer.length /
+              (_rawInputBuffer.buffer.last.timestamp -
+                  _rawInputBuffer.buffer.first.timestamp);
+          print('============ FPS: $fps');
+          final bpmParams = {
+            'inputs': faces.map((e) => e.decodedImage).toList(),
+            'fps': fps,
+            'bpmCalculatorAddress': _bpmModelInferenceService.model.getAddress,
+          };
+          await _bpmModelInferenceService.inference(
+            isolateUtils: _isolateUtils,
+            params: bpmParams,
+          );
+          final bpmResults = _bpmModelInferenceService.bpmResults;
+          print('============ bpm: $bpmResults');
+          if (bpmResults != null) {
+            _avg.update(bpmResults);
+            setState(() {
+              _bpm = _avg.bpm;
+              _hrv = _avg.hrv;
+              _si = _avg.si;
+            });
+          }
+          print('============ Stop calculating bpm');
+        }
         setState(() {
           _predicting = false;
           _rawInputBuffer.clear();
@@ -384,6 +415,8 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
       }
     }
   }
+
+  // void calcBpm(List<FaceDetectionDebugData> faceResults) async {}
 
   Widget _buildInfoBoard() {
     return Column(
@@ -395,6 +428,7 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
         Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
+            _buildAvatar(),
             IconButton(
               onPressed: () {
                 // TODO: Back to home screen
@@ -445,6 +479,7 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
               },
               onFinished: () async {
                 await _cameraController?.stopImageStream();
+                _isolateUtils.dispose();
                 await Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -492,5 +527,12 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
         ),
       ),
     );
+  }
+
+  Widget _buildAvatar() {
+    if (_avatar == null) {
+      return Container();
+    }
+    return Image.memory(Uint8List.fromList(_encoder.encodeImage(_avatar!)));
   }
 }

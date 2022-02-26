@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:ui';
+import 'dart:math' as math;
 
 import 'package:flutter_with_mediapipe/utils/general.dart';
 import 'package:image/image.dart' as image_lib;
@@ -37,6 +38,7 @@ class FaceDetection extends AiModel {
 
   late ImageProcessor _imageProcessor;
   late List<Anchor> _anchors;
+  late TfLiteType _inputType;
 
   @override
   Future<void> loadModel() async {
@@ -64,6 +66,7 @@ class FaceDetection extends AiModel {
             ModelFile.faceDetection,
             options: interpreterOptions,
           );
+      _inputType = interpreter!.getInputTensor(0).type;
 
       final outputTensors = interpreter!.getOutputTensors();
 
@@ -110,11 +113,11 @@ class FaceDetection extends AiModel {
         hScale: 128,
         wScale: 128);
 
-    if (Platform.isAndroid) {
-      image = image_lib.copyRotate(image, -90);
-      image = image_lib.flipHorizontal(image);
-    }
-    final tensorImage = TensorImage(TfLiteType.float32);
+    // if (Platform.isAndroid) {
+    //   image = image_lib.copyRotate(image, -90);
+    //   image = image_lib.flipHorizontal(image);
+    // }
+    final tensorImage = TensorImage(_inputType);
     tensorImage.loadImage(image);
     final inputImage = getProcessedImage(tensorImage);
 
@@ -168,14 +171,24 @@ class FaceDetection extends AiModel {
   }
 
   @override
-  List<List<double>>? predict(List<image_lib.Image> images) {
+  List<FaceDetectionDebugData>? predict(List<image_lib.Image> images) {
+    // Rotate if needs
+    var newImages = [];
+    for (var image in images) {
+      if (Platform.isAndroid) {
+        image = image_lib.copyRotate(image, -90);
+        image = image_lib.flipHorizontal(image);
+      }
+      newImages.add(image);
+    }
+
     var bboxes = <Rect?>[];
     var xs = <double>[];
     var ys = <double>[];
     var ws = <double>[];
     var hs = <double>[];
     var cnt = 0;
-    for (var image in images) {
+    for (var image in newImages) {
       print('============= Predicting frame #$cnt');
       cnt += 1;
       final bbox = _predict(image);
@@ -189,51 +202,235 @@ class FaceDetection extends AiModel {
       print('=============== Bbox: $bbox');
     }
 
-    var retFaces = <List<double>>[];
+    var results = <FaceDetectionDebugData>[];
     var xmean = 0.0, ymean = 0.0, wmean = 0.0, hmean = 0.0;
-    xmean = Vector.fromList(xs).mean();
-    ymean = Vector.fromList(ys).mean();
-    wmean = Vector.fromList(ws).mean();
-    hmean = Vector.fromList(hs).mean();
-    for (var i = 0; i < images.length; i++) {
+    if (xs.isNotEmpty) {
+      xmean = Vector.fromList(xs).mean();
+      ymean = Vector.fromList(ys).mean();
+      wmean = Vector.fromList(ws).mean();
+      hmean = Vector.fromList(hs).mean();
+    }
+    for (var i = 0; i < newImages.length; i++) {
       image_lib.Image face;
-      if (bboxes[i] == null) {
-        print('============= Bbox NULL!!!');
+      const pad = 0;
+      if (bboxes[i] == null && xs.isNotEmpty) {
+        print('============= Bbox NULL and we have a mean image!!!');
+        // Prefer square cropping
+        final croppedSize = math.min(wmean, hmean);
         face = image_lib.copyCrop(
-          images[i],
-          xmean.toInt(),
-          ymean.toInt(),
-          wmean.toInt(),
-          hmean.toInt(),
+          newImages[i],
+          xmean.toInt() - pad ~/ 2,
+          ymean.toInt() - pad ~/ 2,
+          wmean.toInt() + pad,
+          hmean.toInt() + pad,
         );
+      } else if (bboxes[i] == null && xs.isEmpty) {
+        print('============== Bbox NULL, using whole image');
+        face = newImages[i];
       } else {
         print('============= Bbox OK!!!');
+        // Prefer square cropping
+        final croppedSize = math.min(bboxes[i]!.width, bboxes[i]!.height);
         face = image_lib.copyCrop(
-          images[i],
-          bboxes[i]!.left.toInt(),
-          bboxes[i]!.top.toInt(),
-          bboxes[i]!.width.toInt(),
-          bboxes[i]!.height.toInt(),
+          newImages[i],
+          bboxes[i]!.left.toInt() - pad ~/ 2,
+          bboxes[i]!.top.toInt() - pad ~/ 2,
+          bboxes[i]!.width.toInt() + pad,
+          bboxes[i]!.height.toInt() + pad,
         );
       }
       face = image_lib.copyResize(face, width: outputSize, height: outputSize);
-      retFaces.add(imageToFloat32List(face));
+      results.add(
+        FaceDetectionDebugData(
+            decodedImage: imageToFloat32List(face), image: face),
+      );
     }
-    print('============ Len. of returned face images: ${retFaces.length}');
-    return retFaces;
+    print('============ Len. of returned face images: ${results.length}');
+    return results;
   }
 }
 
-List<List<double>>? runFaceDetector(Map<String, dynamic> params) {
+List<FaceDetectionDebugData>? runFaceDetector(Map<String, dynamic> params) {
   final faceDetection = FaceDetection(
       interpreter: Interpreter.fromAddress(params['detectorAddress']));
 
+  var stopwatch = Stopwatch();
+  stopwatch.start();
+  print('=========== Started converting CameraImage to image');
   var images = <image_lib.Image>[];
   for (var cameraImage in params['cameraImages']) {
     final image = ImageUtils.convertCameraImage(cameraImage)!;
     images.add(image);
   }
-  final result = faceDetection.predict(images);
+  final numFrames = params['cameraImages'].length;
+  print(
+      '========== Stopped converting CameraImage to image: ${stopwatch.elapsedMilliseconds / numFrames}ms');
+  final results = faceDetection.predict(images);
 
-  return result;
+  return results;
 }
+
+class FaceDetectionDebugData {
+  final List<double> decodedImage;
+  final image_lib.Image image;
+
+  FaceDetectionDebugData({required this.decodedImage, required this.image});
+}
+
+
+// // ignore: must_be_immutable
+// class FaceDetection {
+//   final int bufferSize;
+//   final outputSize = 36;
+//   final faceDetector = GoogleVision.instance.faceDetector();
+
+//   FaceDetection({this.bufferSize = 101});
+
+//   // @override
+//   // List<Object> get props => [];
+
+//   // @override
+//   // int get getAddress => faceDetector!.address;
+
+//   // @override
+//   Future<List<FaceDetectionDebugData>?> predict(
+//     List<CameraImage> cameraImages,
+//     int imageRotation,
+//     CameraLensDirection dir,
+//   ) async {
+//     var xs = <double>[];
+//     var ys = <double>[];
+//     var ws = <double>[];
+//     var hs = <double>[];
+//     var dets = List<Face?>.filled(cameraImages.length, null);
+
+//     for (var i = 0; i < cameraImages.length; i++) {
+//       var visionImage = GoogleVisionImage.fromBytes(
+//         _concatenatePlanes(cameraImages[i].planes),
+//         _buildMetaData(
+//           cameraImages[i],
+//           _rotationIntToImageRotation(imageRotation),
+//         ),
+//       );
+//       final faces = await faceDetector.processImage(visionImage);
+//       if (faces.isNotEmpty) {
+//         final face = faces[0];
+//         final bbox = face.boundingBox;
+//         final x = bbox.left;
+//         final y = bbox.top;
+//         final w = bbox.width;
+//         final h = bbox.height;
+//         xs.add(x);
+//         ys.add(y);
+//         ws.add(w);
+//         hs.add(h);
+//       }
+//     }
+
+//     // Crop and resize faces. The missing frames will be filled out by mean
+//     var x = Vector.fromList(xs).mean().toInt();
+//     var y = Vector.fromList(ys).mean().toInt();
+//     var w = Vector.fromList(ws).mean().toInt();
+//     var h = Vector.fromList(hs).mean().toInt();
+//     var missingCount = 0;
+//     var results = <FaceDetectionDebugData>[];
+//     for (var i = 0; i < dets.length; i++) {
+//       final face = dets[i];
+//       final image = convertCameraImage(cameraImages[i], dir);
+//       var faceImage = image_lib.Image(outputSize, outputSize);
+
+//       if (image != null) {
+//         if (face != null) {
+//           final bbox = face.boundingBox;
+//           faceImage = image_lib.copyCrop(
+//             image,
+//             bbox.left.toInt(),
+//             bbox.top.toInt(),
+//             bbox.width.toInt(),
+//             bbox.height.toInt(),
+//           );
+//         } else {
+//           faceImage = image_lib.copyCrop(image, x, y, w, h);
+//         }
+//       } else {
+//         print('Could not convert camera image to image');
+//       }
+
+//       results.add(FaceDetectionDebugData(
+//         decodedImage: imageToFloat32List(faceImage).toList(),
+//         image: faceImage,
+//       ));
+//     }
+//     print('========= Missed: $missingCount');
+
+//     return results;
+//   }
+
+//   Uint8List _concatenatePlanes(List<Plane> planes) {
+//     final allBytes = WriteBuffer();
+//     for (var plane in planes) {
+//       allBytes.putUint8List(plane.bytes);
+//     }
+//     return allBytes.done().buffer.asUint8List();
+//   }
+
+//   GoogleVisionImageMetadata _buildMetaData(
+//     CameraImage image,
+//     ImageRotation rotation,
+//   ) {
+//     return GoogleVisionImageMetadata(
+//       rawFormat: image.format.raw,
+//       size: Size(image.width.toDouble(), image.height.toDouble()),
+//       rotation: rotation,
+//       planeData: image.planes.map(
+//         (Plane plane) {
+//           return GoogleVisionImagePlaneMetadata(
+//             bytesPerRow: plane.bytesPerRow,
+//             height: plane.height,
+//             width: plane.width,
+//           );
+//         },
+//       ).toList(),
+//     );
+//   }
+
+//   ImageRotation _rotationIntToImageRotation(int rotation) {
+//     switch (rotation) {
+//       case 0:
+//         return ImageRotation.rotation0;
+//       case 90:
+//         return ImageRotation.rotation90;
+//       case 180:
+//         return ImageRotation.rotation180;
+//       default:
+//         assert(rotation == 270);
+//         return ImageRotation.rotation270;
+//     }
+//   }
+// }
+
+// // List<FaceDetectionDebugData>? runFaceDetector(
+// //     Map<String, dynamic> params) async {
+// //   // final faceDetection = FaceDetection(
+// //   //     interpreter: Interpreter.fromAddress(params['detectorAddress']));
+// //   // final result = faceDetection.predict(
+// //   //   params['cameraImages'],
+// //   //   // params['imageRotation'],
+// //   //   // params['dir'],
+// //   // );
+// //   return result;
+// // }
+
+// void runFaceDetector(Map<String, dynamic> context) {
+//   final messager = HandledIsolate.initialize(context);
+
+//   final faceDetection = FaceDetection();
+//   messager.listen((message) async {
+//     final data = message as Map<String, dynamic>;
+//     final cameraImages = data['cameraImages'];
+//     final imageRotation = data['imageRotation'];
+//     final dir = data['dir'];
+//     final rs = await faceDetection.predict(cameraImages, imageRotation, dir);
+//     messager.send(rs);
+//   });
+// }

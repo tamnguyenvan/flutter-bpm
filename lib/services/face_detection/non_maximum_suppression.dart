@@ -1,6 +1,22 @@
+import 'dart:math' as math;
 import 'package:scidart/numdart.dart';
 
 import 'detection.dart';
+
+double _iou(Detection box1, Detection box2) {
+  final box1Area = (box1.xMax - box1.xMin) * (box1.yMax - box1.yMin);
+  final box2Area = (box2.xMax - box2.xMin) * (box2.yMax - box2.yMin);
+  final xmin = math.max(box1.xMin, box2.xMin);
+  final ymin = math.max(box1.yMin, box2.yMin);
+  final xmax = math.min(box1.xMax, box2.xMax);
+  final ymax = math.min(box1.yMax, box2.yMax);
+  if (xmin < xmax && ymin < ymax) {
+    final intersectionArea = (xmax - xmin) * (ymax - ymin);
+    final denominator = (box1Area + box2Area - intersectionArea);
+    return denominator > 0 ? intersectionArea / denominator : 0;
+  }
+  return 0;
+}
 
 List<Detection> nonMaximumSuppression(
   List<Detection> detections,
@@ -15,9 +31,9 @@ List<Detection> nonMaximumSuppression(
 
   detections.forEach((detection) {
     x1.add(detection.xMin);
-    x2.add(detection.xMin + detection.width);
+    x2.add(detection.xMax);
     y1.add(detection.yMin);
-    y2.add(detection.yMin + detection.height);
+    y2.add(detection.yMax);
     s.add(detection.score);
   });
 
@@ -27,12 +43,34 @@ List<Detection> nonMaximumSuppression(
   var _y2 = Array(y2);
 
   var area = (_x2 - _x1) * (_y2 - _y1);
-  var I = _quickSort(s);
+  var I = _quickSort(s).reversed.toList();
 
   var positions = <int>[];
   I.forEach((element) {
     positions.add(s.indexOf(element));
   });
+
+  // var keptBoxes = <Detection>[];
+  // var outputs = <Detection>[];
+  // for (var i = 0; i < positions.length; i++) {
+  //   final score = I[i];
+  //   final index = positions[i];
+  //   final detection = detections[index];
+  //   var suppressed = false;
+  //   for (var kept in keptBoxes) {
+  //     final iou = _iou(kept, detection);
+  //     if (iou > threshold) {
+  //       suppressed = true;
+  //       break;
+  //     }
+  //   }
+
+  //   if (!suppressed) {
+  //     keptBoxes.add(detection);
+  //     outputs.add(detection);
+  //   }
+  // }
+  // return outputs;
 
   var pick = <int>[];
   while (I.isNotEmpty) {

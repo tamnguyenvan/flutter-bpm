@@ -168,9 +168,9 @@ class BpmCalculator extends BpmAiModel {
     // final inputs = data.inputs;
     // final fps = data.fps;
 
-    var bpm = 0.0;
-    var hrv = 0.0;
-    var si = 0.0;
+    // var bpm = 0.0;
+    // var hrv = 0.0;
+    // var si = 0.0;
 
     // if (!_isLoaded) {
     //   return [bpm, hrv, si];
@@ -182,7 +182,11 @@ class BpmCalculator extends BpmAiModel {
     // Detrend the pulse predictions
     var pulsePred = output.getDoubleList();
     var ba = butter([0.75 / fps * 2, 2.5 / fps * 2]);
-    var pulseOut = filtfilt(ba[0], ba[1], pulsePred);
+    // var ba = [
+    //   [0.15635952, 0.0, -0.15635952],
+    //   [1.0, -1.61758769, 0.68728096]
+    // ];
+    pulsePred = filtfilt(ba[0], ba[1], pulsePred);
     // var z = lfilter(Array(ba[0]), Array(ba[1]), Array(pulsePred));
     // pulsePred = [
     //   0.1060263544158138,
@@ -238,7 +242,7 @@ class BpmCalculator extends BpmAiModel {
     // ];
 
     // Calculate heart rate
-    var peakIndices = findPeaksByDistance(pulseOut, distance: 15);
+    var peakIndices = findPeaksByDistance(pulsePred, distance: 15);
     var rs = _calc(peakIndices, fps);
     print('=============== Raw results: $rs');
     // avg.update(rs);

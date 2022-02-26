@@ -17,9 +17,9 @@ class ModelInferenceService {
   late AiModel model;
   late Function handler;
   // Map<String, dynamic>? inferenceResults;
-  List<List<double>>? inferenceResults;
+  List<FaceDetectionDebugData>? inferenceResults;
 
-  Future<List<List<double>>?> inference({
+  Future<List<FaceDetectionDebugData>?> inference({
     required IsolateUtils isolateUtils,
     // required List<CameraImage> cameraImages,
     required Map<String, dynamic> params,
@@ -42,13 +42,9 @@ class ModelInferenceService {
     responsePort.close();
   }
 
-  void setModelConfig(int index) {
-    switch (Models.values[index]) {
-      case Models.FaceDetection:
-        model = locator<FaceDetection>();
-        handler = runFaceDetector;
-        break;
-    }
+  void setModelConfig() {
+    model = locator<FaceDetection>();
+    handler = runFaceDetector;
   }
 }
 
