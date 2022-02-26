@@ -77,6 +77,22 @@ import 'package:image/image.dart' as imglib;
 //   }
 // }
 
+// num median(List<num> x) {
+//   if (x.isEmpty) {
+//     return 0;
+//   }
+
+//   var clone = <num>[];
+//   clone.addAll(x);
+//   clone.sort();
+//   final middle = clone.length ~/ 2;
+//   if (clone.length % 2 == 1) {
+//     return clone[middle];
+//   } else {
+//     return (clone[middle - 1] - clone[middle]) / 2;
+//   }
+// }
+
 Float32List imageToFloat32List(imglib.Image image) {
   var convertedBytes = Float32List(1 * image.height * image.width * 3);
   var buffer = Float32List.view(convertedBytes.buffer);

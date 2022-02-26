@@ -34,7 +34,7 @@ dependencies:
   ml_linalg:
   timer_count_down:
   google_ml_vision:
-  opencv:
+  wakelock: 0.5.5
 
 dev_dependencies:
   flutter_test:

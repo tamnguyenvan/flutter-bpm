@@ -240,10 +240,14 @@ class FaceDetection extends AiModel {
         );
       }
       face = image_lib.copyResize(face, width: outputSize, height: outputSize);
+      final stopwatch = Stopwatch();
+      stopwatch.start();
       results.add(
         FaceDetectionDebugData(
             decodedImage: imageToFloat32List(face), image: face),
       );
+      stopwatch.stop();
+      print('============ Converted time: ${stopwatch.elapsedMilliseconds}ms');
     }
     print('============ Len. of returned face images: ${results.length}');
     return results;

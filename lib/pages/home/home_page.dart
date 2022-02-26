@@ -1,135 +1,11 @@
-// import 'dart:ui';
-
-// import 'package:flutter/material.dart';
-// import 'package:flutter_screenutil/flutter_screenutil.dart';
-
-// import '../../constants/data.dart';
-// import 'widgets/model_card.dart';
-
-// class HomePage extends StatefulWidget {
-//   const HomePage({Key? key}) : super(key: key);
-
-//   @override
-//   _HomePageState createState() => _HomePageState();
-// }
-
-// class _HomePageState extends State<HomePage> {
-//   late PageController _pageController;
-//   double _currentPageValue = 0.0;
-
-//   @override
-//   void initState() {
-//     super.initState();
-//     _pageController = PageController(viewportFraction: 0.8)
-//       ..addListener(() {
-//         setState(() {
-//           _currentPageValue = _pageController.page!;
-//         });
-//       });
-//   }
-
-//   @override
-//   Widget build(BuildContext context) {
-//     return Scaffold(
-//       extendBodyBehindAppBar: true,
-//       appBar: AppBar(
-//         centerTitle: true,
-//         title: Text(
-//           'Select Your Model',
-//           style: TextStyle(
-//               color: Colors.white,
-//               fontSize: ScreenUtil().setSp(28),
-//               fontWeight: FontWeight.bold),
-//         ),
-//       ),
-//       body: Stack(
-//         children: [
-//           _BackGroundImage(currentPageValue: _currentPageValue),
-//           _ModelPreview(
-//             pageController: _pageController,
-//             currentPageValue: _currentPageValue,
-//           ),
-//         ],
-//       ),
-//     );
-//   }
-// }
-
-// class _BackGroundImage extends StatelessWidget {
-//   const _BackGroundImage({
-//     Key? key,
-//     required this.currentPageValue,
-//   }) : super(key: key);
-
-//   final double currentPageValue;
-
-//   @override
-//   Widget build(BuildContext context) {
-//     return Container(
-//       decoration: BoxDecoration(
-//         image: DecorationImage(
-//           image: AssetImage(
-//             models[currentPageValue.round()]['image']!,
-//           ),
-//           fit: BoxFit.cover,
-//         ),
-//       ),
-//       child: BackdropFilter(
-//         filter: ImageFilter.blur(
-//           sigmaX: 5.0,
-//           sigmaY: 5.0,
-//         ),
-//         child: Container(
-//           color: Colors.black.withOpacity(0.15),
-//         ),
-//       ),
-//     );
-//   }
-// }
-
-// class _ModelPreview extends StatelessWidget {
-//   const _ModelPreview({
-//     Key? key,
-//     required this.pageController,
-//     required this.currentPageValue,
-//   }) : super(key: key);
-
-//   final PageController pageController;
-//   final double currentPageValue;
-
-//   @override
-//   Widget build(BuildContext context) {
-//     return Center(
-//       child: Container(
-//         height: ScreenUtil().setHeight(450.0),
-//         child: PageView.builder(
-//           controller: pageController,
-//           physics: const BouncingScrollPhysics(),
-//           itemCount: models.length,
-//           itemBuilder: (context, index) {
-//             var scale = (currentPageValue - index).abs();
-//             return ModelCard(
-//               index: index,
-//               scale: scale,
-//             );
-//           },
-//         ),
-//       ),
-//     );
-//   }
-// }
 import 'dart:async';
-import 'dart:convert';
-import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
 import 'package:camera/camera.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_with_mediapipe/constants/model.dart';
 import 'package:flutter_with_mediapipe/pages/success/success_view.dart';
-import 'package:flutter_with_mediapipe/services/face_detection/face_detection_service.dart';
 import 'package:flutter_with_mediapipe/services/model_inference_service.dart';
 import 'package:flutter_with_mediapipe/services/service_locator.dart';
 import 'package:flutter_with_mediapipe/utils/bpm_calculator.dart';
@@ -137,12 +13,8 @@ import 'package:flutter_with_mediapipe/utils/face_utils.dart';
 import 'package:flutter_with_mediapipe/utils/isolate_utils.dart';
 import 'package:image/image.dart' as image_lib;
 import 'package:timer_count_down/timer_count_down.dart';
+import 'package:wakelock/wakelock.dart';
 
-import 'widgets/index_box.dart';
-
-// import 'success_view.dart';
-// import 'package:timer_count_down/timer_count_down.dart';
-// import '../utils/bpm_calculator.dart';
 class HomePage extends StatelessWidget {
   const HomePage({Key? key}) : super(key: key);
 
@@ -195,7 +67,7 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
     _modelInferenceService = locator<ModelInferenceService>();
     _bpmModelInferenceService = locator<BpmModelInferenceService>();
     _rawInputBuffer = RawInputBuffer(bufferSize: FaceDetectionParam.bufferSize);
-    _avg = MovingAverage();
+    _avg = MovingAverage(alpha: 0.8);
     _encoder = image_lib.JpegEncoder();
     _initStateAsync();
     super.initState();
@@ -217,6 +89,7 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
     _isolateUtils.dispose();
     _modelInferenceService.inferenceResults = null;
     _bpmModelInferenceService.bpmResults = null;
+    Wakelock.disable();
     super.dispose();
   }
 
@@ -250,6 +123,7 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
       _showInSnackBar('Error: ${e.code}\n${e.description}');
     }
 
+    await Wakelock.enable();
     await _cameraController!.startImageStream(
       (CameraImage cameraImage) async =>
           await _inference(cameraImage: cameraImage),
@@ -370,15 +244,16 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
           params: params,
         );
         final faces = _modelInferenceService.inferenceResults;
+
+        print(
+            '========== Number of faces: ${faces != null ? faces.length : 0}');
+        print('============ Stop detecting faces');
         if (faces != null) {
           // Debug with an avatar
           setState(() {
             _avatar =
                 image_lib.copyResize(faces[0].image, width: 36, height: 36);
           });
-
-          print('========== Number of faces: ${faces.length}');
-          print('============ Stop detecting faces');
 
           print('============ Start calculating bpm');
           // Calculate real fps

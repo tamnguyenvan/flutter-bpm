@@ -276,37 +276,37 @@ class BpmCalculator extends BpmAiModel {
     // HRV = sqrt(mean((RR1 - RR2)^2 + (RR2 - RR3)^2 + ...))
     if (rrList.length >= 2) {
       var sumSquaredIntervalDiff = 0.0;
-      var maxIntervalValue = rrList[0];
-      var minIntervalValue = rrList[0];
-      var mostFreqCounter = 0;
-      var mode = 0;
-      var rrIntervalToFreqMap = {};
-      rrIntervalToFreqMap[rrList[0]] = 1;
+      // var maxIntervalValue = rrList[0];
+      // var minIntervalValue = rrList[0];
+      // var mostFreqCounter = 0;
+      // var mode = 0;
+      // var rrIntervalToFreqMap = {};
+      // rrIntervalToFreqMap[rrList[0]] = 1;
       for (var i = 1; i < rrList.length; i++) {
         // For calculating HRV then
         sumSquaredIntervalDiff += math.pow(rrList[i] - rrList[i - 1], 2);
 
-        // Find max R-R interval value
-        if (rrList[i] > maxIntervalValue) {
-          maxIntervalValue = rrList[i];
-        }
+        // // Find max R-R interval value
+        // if (rrList[i] > maxIntervalValue) {
+        //   maxIntervalValue = rrList[i];
+        // }
 
-        // Find min R-R interval value
-        if (rrList[i] < minIntervalValue) {
-          minIntervalValue = rrList[i];
-        }
+        // // Find min R-R interval value
+        // if (rrList[i] < minIntervalValue) {
+        //   minIntervalValue = rrList[i];
+        // }
 
-        // Calculate mode (the most recurring R-R value) and it's occurences
-        var rrKey = rrList[i];
-        if (rrIntervalToFreqMap.containsKey(rrKey)) {
-          rrIntervalToFreqMap[rrKey] += 1;
-        } else {
-          rrIntervalToFreqMap[rrKey] = 1;
-        }
-        if (rrIntervalToFreqMap[rrKey] > mostFreqCounter) {
-          mode = rrKey;
-          mostFreqCounter = rrIntervalToFreqMap[rrKey];
-        }
+        // // Calculate mode (the most recurring R-R value) and it's occurences
+        // var rrKey = rrList[i];
+        // if (rrIntervalToFreqMap.containsKey(rrKey)) {
+        //   rrIntervalToFreqMap[rrKey] += 1;
+        // } else {
+        //   rrIntervalToFreqMap[rrKey] = 1;
+        // }
+        // if (rrIntervalToFreqMap[rrKey] > mostFreqCounter) {
+        //   mode = rrKey;
+        //   mostFreqCounter = rrIntervalToFreqMap[rrKey];
+        // }
       }
 
       // It's time to calculate stress index
@@ -314,10 +314,43 @@ class BpmCalculator extends BpmAiModel {
       // Ref: https://r-forge.r-project.org/forum/attachment.php?attachid=634&group_id=919&forum_id=2951
       hrv = math.sqrt(sumSquaredIntervalDiff / (rrList.length - 1));
 
-      var amo = 100 * mostFreqCounter / rrList.length;
-      var vr = (maxIntervalValue - minIntervalValue) / 1000; // ms
-      var modeInMs = mode / 1000; // ms
-      si = amo / (2 * vr * modeInMs + 1e-12);
+      // var amo = 100 * mostFreqCounter / rrList.length;
+      // var vr = (maxIntervalValue - minIntervalValue) / 1000; // ms
+      // var modeInMs = mode / 1000; // ms
+      // si = amo / (2 * vr * modeInMs + 1e-12);
+
+      // Ref: https://www.kubios.com/hrv-analysis-methods/
+      // Binarize the RR-intervals with bin size = 50ms
+      const binSize = 50; // 50ms
+      final firstBin = (rrList[0] / binSize).ceil();
+      var maxInterval = firstBin;
+      var minInterval = firstBin;
+      var rrDist = {firstBin: 1};
+      var maxFreqs = 0;
+      var mode = 0;
+      for (var i = 1; i < rrList.length; i++) {
+        final bin = (rrList[i] / binSize).ceil();
+        if (rrDist.containsKey(bin)) {
+          rrDist[bin] = rrDist[bin]! + 1;
+        } else {
+          rrDist[bin] = 1;
+        }
+        if (rrDist[bin]! > maxFreqs) {
+          mode = bin;
+          maxFreqs = rrDist[bin]!;
+        }
+
+        if (bin > maxInterval) {
+          maxInterval = bin;
+        }
+
+        if (bin < minInterval) {
+          minInterval = bin;
+        }
+      }
+      var mo = (mode * binSize).toDouble() / 1000.0;
+      var mxDmn = (maxInterval - minInterval + 1e-12) * binSize / 1000.0;
+      si = (maxFreqs / rrList.length) / (2 * mo * mxDmn);
 
       // Scale the Stress index for more user-friendly
       // si = 10 * si;
