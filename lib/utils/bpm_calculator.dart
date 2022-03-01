@@ -92,6 +92,7 @@ import 'signals.dart';
 //   BPMIsolateData(this.inputs, this.fps);
 // }
 
+// ignore: must_be_immutable
 class BpmCalculator extends BpmAiModel {
   // Default range
   final List<double> bpmRange = [40, 200];

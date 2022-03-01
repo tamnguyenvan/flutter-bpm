@@ -7,11 +7,11 @@ import 'model_inference_service.dart';
 final locator = GetIt.instance;
 
 void setupLocator() {
-  locator.registerSingleton<FaceDetection>(FaceDetection());
+  // locator.registerSingleton<FaceDetection>(FaceDetection());
   locator.registerSingleton<BpmCalculator>(BpmCalculator());
 
-  locator.registerLazySingleton<ModelInferenceService>(
-      () => ModelInferenceService());
+  // locator.registerLazySingleton<ModelInferenceService>(
+  //     () => ModelInferenceService());
   locator.registerLazySingleton<BpmModelInferenceService>(
       () => BpmModelInferenceService());
 }

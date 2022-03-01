@@ -13,40 +13,40 @@ enum Models {
   FaceDetection,
 }
 
-class ModelInferenceService {
-  late AiModel model;
-  late Function handler;
-  // Map<String, dynamic>? inferenceResults;
-  List<FaceDetectionDebugData>? inferenceResults;
+// class ModelInferenceService {
+//   late AiModel model;
+//   late Function handler;
+//   // Map<String, dynamic>? inferenceResults;
+//   List<FaceDetectionDebugData>? inferenceResults;
 
-  Future<List<FaceDetectionDebugData>?> inference({
-    required IsolateUtils isolateUtils,
-    // required List<CameraImage> cameraImages,
-    required Map<String, dynamic> params,
-  }) async {
-    final responsePort = ReceivePort();
+//   Future<List<FaceDetectionDebugData>?> inference({
+//     required IsolateUtils isolateUtils,
+//     // required List<CameraImage> cameraImages,
+//     required Map<String, dynamic> params,
+//   }) async {
+//     final responsePort = ReceivePort();
 
-    isolateUtils.sendMessage(
-      handler: handler,
-      // params: {
-      //   'cameraImages': cameraImages,
-      //   'detectorAddress': model.getAddress,
-      // },
-      params: params,
-      sendPort: isolateUtils.sendPort,
-      responsePort: responsePort,
-    );
+//     isolateUtils.sendMessage(
+//       handler: handler,
+//       // params: {
+//       //   'cameraImages': cameraImages,
+//       //   'detectorAddress': model.getAddress,
+//       // },
+//       params: params,
+//       sendPort: isolateUtils.sendPort,
+//       responsePort: responsePort,
+//     );
 
-    inferenceResults = await responsePort.first;
-    print('============== Inference results: $inferenceResults');
-    responsePort.close();
-  }
+//     inferenceResults = await responsePort.first;
+//     print('============== Inference results: $inferenceResults');
+//     responsePort.close();
+//   }
 
-  void setModelConfig() {
-    model = locator<FaceDetection>();
-    handler = runFaceDetector;
-  }
-}
+//   void setModelConfig() {
+//     model = locator<FaceDetection>();
+//     handler = runFaceDetector;
+//   }
+// }
 
 class BpmModelInferenceService {
   late BpmAiModel model;

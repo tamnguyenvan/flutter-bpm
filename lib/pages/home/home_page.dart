@@ -1,19 +1,24 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
 import 'package:camera/camera.dart';
 import 'package:flutter_with_mediapipe/constants/model.dart';
+import 'package:flutter_with_mediapipe/pages/home/widgets/face_box_painter.dart';
 import 'package:flutter_with_mediapipe/pages/success/success_view.dart';
 import 'package:flutter_with_mediapipe/services/model_inference_service.dart';
 import 'package:flutter_with_mediapipe/services/service_locator.dart';
 import 'package:flutter_with_mediapipe/utils/bpm_calculator.dart';
+import 'package:flutter_with_mediapipe/utils/bpm_utils.dart';
 import 'package:flutter_with_mediapipe/utils/face_utils.dart';
+import 'package:flutter_with_mediapipe/utils/image_utils.dart';
 import 'package:flutter_with_mediapipe/utils/isolate_utils.dart';
 import 'package:image/image.dart' as image_lib;
 import 'package:timer_count_down/timer_count_down.dart';
 import 'package:wakelock/wakelock.dart';
+import 'package:dotted_border/dotted_border.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({Key? key}) : super(key: key);
@@ -41,6 +46,10 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
   late List<CameraDescription> _cameras;
   late CameraDescription _cameraDescription;
 
+  // Screen size
+  double? _cropRectWidthNorm;
+  double? _cropRectHeightNorm;
+
   late bool _isRun;
   bool _predicting = false;
   bool _draw = false;
@@ -48,9 +57,9 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
   // Face detection
   var numEliminateFirstFrame = 20;
   late IsolateUtils _isolateUtils;
-  late ModelInferenceService _modelInferenceService;
+  // late ModelInferenceService _modelInferenceService;
   late BpmModelInferenceService _bpmModelInferenceService;
-  late RawInputBuffer _rawInputBuffer;
+  late InputBuffer _inputBuffer;
   late MovingAverage _avg;
 
   // For debug
@@ -64,9 +73,9 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
 
   @override
   void initState() {
-    _modelInferenceService = locator<ModelInferenceService>();
+    // _modelInferenceService = locator<ModelInferenceService>();
     _bpmModelInferenceService = locator<BpmModelInferenceService>();
-    _rawInputBuffer = RawInputBuffer(bufferSize: FaceDetectionParam.bufferSize);
+    _inputBuffer = InputBuffer(bufferSize: FaceDetectionParam.bufferSize);
     _avg = MovingAverage(alpha: 0.8);
     _encoder = image_lib.JpegEncoder();
     _initStateAsync();
@@ -76,7 +85,7 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
   void _initStateAsync() async {
     _isolateUtils = IsolateUtils();
     await _isolateUtils.initIsolate();
-    locator<ModelInferenceService>().setModelConfig();
+    // locator<ModelInferenceService>().setModelConfig();
     locator<BpmModelInferenceService>().setModelConfig();
     await _initCamera();
     _predicting = false;
@@ -87,7 +96,7 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
     _cameraController?.dispose();
     _cameraController = null;
     _isolateUtils.dispose();
-    _modelInferenceService.inferenceResults = null;
+    // _modelInferenceService.inferenceResults = null;
     _bpmModelInferenceService.bpmResults = null;
     Wakelock.disable();
     super.dispose();
@@ -125,8 +134,7 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
 
     await Wakelock.enable();
     await _cameraController!.startImageStream(
-      (CameraImage cameraImage) async =>
-          await _inference(cameraImage: cameraImage),
+      (CameraImage cameraImage) async => _inference(cameraImage: cameraImage),
     );
 
     if (mounted) {
@@ -171,6 +179,18 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
     //         si: _si,
     //         maxSeconds: maxSeconds,
     //         context: context),
+    // final facePainter = FaceBoxCustomPainter(
+    //   bbox: Rect.fromCenter(
+    //     center: const Offset(0.0, 0.0),
+    //     width: BpmCalculatorParam.inputSize * 6,
+    //     height: BpmCalculatorParam.inputSize * 6,
+    //   ),
+    // );
+    final rectDisplayWidth = screenSize.width / 2;
+    final rectDisplayHeight = screenSize.height / 3;
+    // final rectDisplayHeight = rectDisplayWidth;
+    _cropRectWidthNorm = rectDisplayWidth / (screenSize.width * scale);
+    _cropRectHeightNorm = _cropRectWidthNorm;
     return Scaffold(
       body: Stack(
         // fit: StackFit.expand,
@@ -183,6 +203,7 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
           ),
           // CameraPreview(_cameraController!),
           _buildInfoBoard(),
+          _buildFaceRect(rectDisplayHeight, rectDisplayWidth),
           // InfoBoard(
           //   bpm: _bpm,
           //   hrv: _hrv,
@@ -198,97 +219,189 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
   Future<void> _inference({required CameraImage cameraImage}) async {
     if (!mounted) return;
 
-    if (_modelInferenceService.model.interpreter != null) {
+    // if (_modelInferenceService.model.interpreter != null) {
+    if (_bpmModelInferenceService.model.interpreter != null) {
       if (_predicting) {
         return;
       } else {
-        final now = DateTime.now().millisecondsSinceEpoch;
-        print('============== Frame #${_rawInputBuffer.length} now $now');
-        _rawInputBuffer.update(
-          cameraImage,
-          now,
-        );
+        // final now = DateTime.now().millisecondsSinceEpoch;
+        // _rawInputBuffer.update(
+        //   cameraImage,
+        //   now,
+        // );
+        // print('============== Frame #${_rawInputBuffer.length} now $now');
 
-        // At the beginning, some frames seems too bright. That might affect
-        // the accuracy so we want to eliminate those frames.
-        if (_rawInputBuffer.buffer.isNotEmpty && numEliminateFirstFrame > 0) {
-          print('============ Eliminating a frame');
-          _rawInputBuffer.buffer.removeFirst();
+        // // At the beginning, some frames seems too bright. That might affect
+        // // the accuracy so we want to eliminate those frames.
+        // if (_rawInputBuffer.buffer.isNotEmpty && numEliminateFirstFrame > 0) {
+        //   print('============ Eliminating a frame');
+        //   _rawInputBuffer.buffer.removeFirst();
+        //   numEliminateFirstFrame--;
+        // }
+        if (numEliminateFirstFrame > 0) {
           numEliminateFirstFrame--;
+          print('============ Eliminating a frame');
+          return;
         }
       }
 
-      if (_rawInputBuffer.ready) {
+      // if (_rawInputBuffer.ready) {
+      print('========== buffer len.: ${_inputBuffer.length}');
+      if (_inputBuffer.ready) {
         setState(() {
           _predicting = true;
         });
 
-        print('============ Start detecting faces');
-        final cameraImages =
-            _rawInputBuffer.buffer.map((e) => e.image).toList();
-        final params = {
-          'cameraImages': cameraImages,
-          'detectorAddress': _modelInferenceService.model.getAddress,
-          // 'imageRotation': _cameraDescription.sensorOrientation,
-          // 'dir': _cameraDescription.lensDirection,
+        print('============ Start calculating bpm');
+        print('============ FPS: ${_inputBuffer.fps}');
+        final bpmParams = {
+          'inputs': _inputBuffer.buffer.map((e) => e.image).toList(),
+          'fps': _inputBuffer.fps,
+          'bpmCalculatorAddress': _bpmModelInferenceService.model.getAddress,
         };
-        // isolates.spawn(
-        //   runFaceDetector,
-        //   name: 'face_detector',
-        //   onReceive: calcBpm,
-        //   onInitialized: () => isolates.send(params, to: 'face_detector'),
-        // );
-        await _modelInferenceService.inference(
+        await _bpmModelInferenceService.inference(
           isolateUtils: _isolateUtils,
-          // cameraImages: cameraImages,
-          params: params,
+          params: bpmParams,
         );
-        final faces = _modelInferenceService.inferenceResults;
-
-        print(
-            '========== Number of faces: ${faces != null ? faces.length : 0}');
-        print('============ Stop detecting faces');
-        if (faces != null) {
-          // Debug with an avatar
+        final bpmResults = _bpmModelInferenceService.bpmResults;
+        print('============ bpm: $bpmResults');
+        if (bpmResults != null) {
+          _avg.update(bpmResults);
           setState(() {
-            _avatar =
-                image_lib.copyResize(faces[0].image, width: 36, height: 36);
+            _bpm = _avg.bpm;
+            _hrv = _avg.hrv;
+            _si = _avg.si;
           });
-
-          print('============ Start calculating bpm');
-          // Calculate real fps
-          final fps = 1000 *
-              _rawInputBuffer.length /
-              (_rawInputBuffer.buffer.last.timestamp -
-                  _rawInputBuffer.buffer.first.timestamp);
-          print('============ FPS: $fps');
-          final bpmParams = {
-            'inputs': faces.map((e) => e.decodedImage).toList(),
-            'fps': fps,
-            'bpmCalculatorAddress': _bpmModelInferenceService.model.getAddress,
-          };
-          await _bpmModelInferenceService.inference(
-            isolateUtils: _isolateUtils,
-            params: bpmParams,
-          );
-          final bpmResults = _bpmModelInferenceService.bpmResults;
-          print('============ bpm: $bpmResults');
-          if (bpmResults != null) {
-            _avg.update(bpmResults);
-            setState(() {
-              _bpm = _avg.bpm;
-              _hrv = _avg.hrv;
-              _si = _avg.si;
-            });
-          }
-          print('============ Stop calculating bpm');
         }
+        print('============ Stop calculating bpm');
+
         setState(() {
           _predicting = false;
-          _rawInputBuffer.clear();
+          _inputBuffer.clear();
+        });
+      } else {
+        if (_cropRectHeightNorm == null || _cropRectWidthNorm == null) {
+          return;
+        }
+
+        var cropRectSize = Platform.isAndroid
+            ? _cropRectWidthNorm! * cameraImage.height
+            : _cropRectWidthNorm! * cameraImage.width;
+        var center = const Offset(0.0, 0.0);
+        center = Offset(cameraImage.width / 2, cameraImage.height / 2);
+        final stopwatch = Stopwatch();
+        stopwatch.start();
+        final results = ImageUtils.cropImage(
+          cameraImage,
+          Rect.fromCenter(
+            center: center,
+            width: cropRectSize,
+            height: cropRectSize,
+          ),
+        );
+        stopwatch.stop();
+        print(
+            '================= Crop time: ${stopwatch.elapsedMilliseconds}ms');
+        final now = DateTime.now().millisecondsSinceEpoch;
+        _inputBuffer
+            .update(InputData(results[0] as image_lib.Image, now.toDouble()));
+
+        // for debug only
+        final cropRectWidth = _cropRectWidthNorm! * cameraImage.width;
+        final cropRectHeight = cropRectWidth;
+        setState(() {
+          // final rgb = image_lib.Image.fromBytes(
+          //   cropRectSize.toInt() % 2 == 1
+          //       ? cropRectSize.toInt() - 1
+          //       : cropRectSize.toInt(),
+          //   cropRectSize.toInt() % 2 == 1
+          //       ? cropRectSize.toInt() - 1
+          //       : cropRectSize.toInt(),
+          //   _inputBuffer.buffer.last.image,
+          // );
+          // print(
+          //     '========== rgb len: ${_inputBuffer.buffer.last.image.length} ${rgb.width} ${rgb.height}');
+          // _avatar = results[0] as image_lib.Image;
+          // _avatar = image_lib.copyResize(
+          //   rgb,
+          //   width: 36,
+          //   height: 36,
+          // );
+          // _avatar = rgb;
         });
       }
     }
+
+    // print('============ Started detecting faces');
+    // // final cameraImages =
+    // //     _rawInputBuffer.buffer.map((e) => e.image).toList()[0];
+
+    // final params = {
+    //   'cameraImages': [cameraImage],
+    //   'detectorAddress': _modelInferenceService.model.getAddress,
+    //   // 'imageRotation': _cameraDescription.sensorOrientation,
+    //   // 'dir': _cameraDescription.lensDirection,
+    // };
+
+    // await _modelInferenceService.inference(
+    //   isolateUtils: _isolateUtils,
+    //   // cameraImages: cameraImages,
+    //   params: params,
+    // );
+    // final faces = _modelInferenceService.inferenceResults;
+
+    // print('========== Number of faces: ${faces != null ? faces.length : 0}');
+    // print('============ Stop detecting faces');
+    // if (faces != null) {
+    //   // Debug with an avatar
+    //   setState(() {
+    //     _avatar = image_lib.copyResize(faces[0].image, width: 36, height: 36);
+    //   });
+
+    // final center = Offset(cameraImage.width / 2, cameraImage.height / 2);
+    // final cropRect = Rect.fromCenter(
+    //   center: center,
+    //   width: BpmCalculatorParam.inputSize * 6,
+    //   height: BpmCalculatorParam.inputSize * 6,
+    // );
+    // final croppedImage = ImageUtils.cropImage(cameraImage, cropRect);
+    // _rawInputBuffer.update(croppedImage);
+    // if (_rawInputBuffer.ready) {}
+
+    //   print('============ Start calculating bpm');
+    //   // Calculate real fps
+    //   final fps = 1000 *
+    //       _rawInputBuffer.length /
+    //       (_rawInputBuffer.buffer.last.timestamp -
+    //           _rawInputBuffer.buffer.first.timestamp);
+    //   print('============ FPS: $fps');
+    //   final bpmParams = {
+    //     'inputs': faces.map((e) => e.decodedImage).toList(),
+    //     'fps': fps,
+    //     'bpmCalculatorAddress': _bpmModelInferenceService.model.getAddress,
+    //   };
+    //   await _bpmModelInferenceService.inference(
+    //     isolateUtils: _isolateUtils,
+    //     params: bpmParams,
+    //   );
+    //   final bpmResults = _bpmModelInferenceService.bpmResults;
+    //   print('============ bpm: $bpmResults');
+    //   if (bpmResults != null) {
+    //     _avg.update(bpmResults);
+    //     setState(() {
+    //       _bpm = _avg.bpm;
+    //       _hrv = _avg.hrv;
+    //       _si = _avg.si;
+    //     });
+    //   }
+    //   print('============ Stop calculating bpm');
+    // }
+    // setState(() {
+    //   _predicting = false;
+    //   _rawInputBuffer.clear();
+    // });
+    // }
+    // }
   }
 
   // void calcBpm(List<FaceDetectionDebugData> faceResults) async {}
@@ -303,7 +416,7 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
         Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            _buildAvatar(),
+            // _buildAvatar(),
             IconButton(
               onPressed: () {
                 // TODO: Back to home screen
@@ -404,10 +517,38 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildAvatar() {
-    if (_avatar == null) {
-      return Container();
-    }
-    return Image.memory(Uint8List.fromList(_encoder.encodeImage(_avatar!)));
+  Widget _buildFaceRect(double rectDisplayHeight, double rectDisplayWidth) {
+    return Center(
+      child: DottedBorder(
+        color: Colors.white,
+        dashPattern: [6, 6],
+        borderType: BorderType.RRect,
+        strokeWidth: 3,
+        radius: const Radius.circular(12),
+        child: ClipRRect(
+          borderRadius: const BorderRadius.all(
+            Radius.circular(12),
+          ),
+          child: Container(
+            height: rectDisplayHeight,
+            width: rectDisplayWidth,
+          ),
+        ),
+      ),
+    );
   }
+
+  // Widget _buildAvatar() {
+  //   if (_avatar == null) {
+  //     return Container();
+  //   }
+  //   // try {
+  //   final resized = image_lib.copyResize(_avatar!, width: 72, height: 72);
+  //   final encoded = _encoder.encodeImage(resized);
+  //   // } on Exception catch (e) {
+  //   //   print('================= $e');
+  //   // }
+  //   return Image.memory(Uint8List.fromList(encoded));
+  //   // return Container();
+  // }
 }

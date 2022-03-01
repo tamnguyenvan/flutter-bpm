@@ -254,25 +254,25 @@ class FaceDetection extends AiModel {
   }
 }
 
-List<FaceDetectionDebugData>? runFaceDetector(Map<String, dynamic> params) {
-  final faceDetection = FaceDetection(
-      interpreter: Interpreter.fromAddress(params['detectorAddress']));
+// List<FaceDetectionDebugData>? runFaceDetector(Map<String, dynamic> params) {
+//   final faceDetection = FaceDetection(
+//       interpreter: Interpreter.fromAddress(params['detectorAddress']));
 
-  var stopwatch = Stopwatch();
-  stopwatch.start();
-  print('=========== Started converting CameraImage to image');
-  var images = <image_lib.Image>[];
-  for (var cameraImage in params['cameraImages']) {
-    final image = ImageUtils.convertCameraImage(cameraImage)!;
-    images.add(image);
-  }
-  final numFrames = params['cameraImages'].length;
-  print(
-      '========== Stopped converting CameraImage to image: ${stopwatch.elapsedMilliseconds / numFrames}ms');
-  final results = faceDetection.predict(images);
+//   var stopwatch = Stopwatch();
+//   stopwatch.start();
+//   print('=========== Started converting CameraImage to image');
+//   var images = <image_lib.Image>[];
+//   for (var cameraImage in params['cameraImages']) {
+//     final image = ImageUtils.convertCameraImage(cameraImage)!;
+//     images.add(image);
+//   }
+//   final numFrames = params['cameraImages'].length;
+//   print(
+//       '========== Stopped converting CameraImage to image: ${stopwatch.elapsedMilliseconds / numFrames}ms');
+//   final results = faceDetection.predict(images);
 
-  return results;
-}
+//   return results;
+// }
 
 class FaceDetectionDebugData {
   final List<double> decodedImage;

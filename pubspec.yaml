@@ -35,6 +35,7 @@ dependencies:
   timer_count_down:
   google_ml_vision:
   wakelock: 0.5.5
+  dotted_border:
 
 dev_dependencies:
   flutter_test:

@@ -8,9 +8,10 @@ mixin ModelFile {
 }
 
 mixin FaceDetectionParam {
-  static const int bufferSize = 101;
+  static const int bufferSize = 501;
 }
 
 mixin BpmCalculatorParam {
-  static const int maxSeconds = 60;
+  static const int inputSize = 36;
+  static const int maxSeconds = 600;
 }

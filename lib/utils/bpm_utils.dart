@@ -1,3 +1,64 @@
+import 'dart:collection';
+
+import 'package:flutter_with_mediapipe/constants/model.dart';
+import 'package:flutter_with_mediapipe/utils/general.dart';
+import 'package:image/image.dart' as image_lib;
+
+class InputData {
+  late List<int> decodedImage;
+  image_lib.Image image;
+  double timestamp;
+  InputData(this.image, this.timestamp) {
+    final resizedImage = image_lib.copyResize(
+      image,
+      width: BpmCalculatorParam.inputSize,
+      height: BpmCalculatorParam.inputSize,
+    );
+    decodedImage = imageToList(resizedImage);
+  }
+}
+
+class InputBuffer {
+  final int bufferSize;
+  late ListQueue<InputData> buffer;
+  InputBuffer({this.bufferSize = 101}) {
+    buffer = ListQueue<InputData>();
+  }
+
+  void update(InputData item) {
+    if (buffer.length == bufferSize) {
+      buffer.removeFirst();
+    }
+    buffer.addLast(item);
+  }
+
+  InputData elementAt(int index) {
+    return buffer.elementAt(index);
+  }
+
+  void clear() {
+    buffer.clear();
+  }
+
+  bool get ready {
+    var isRead = buffer.length == bufferSize;
+    // return buffer.length == bufferSize;
+    return isRead;
+  }
+
+  int get length {
+    return buffer.length;
+  }
+
+  double get fps {
+    if (buffer.length >= 2) {
+      return (1000 * length / (buffer.last.timestamp - buffer.first.timestamp))
+          .clamp(1, 1000);
+    }
+    return 0;
+  }
+}
+
 List<int> findPeaksByDistance(List<double> pulsePred, {int distance = 15}) {
   var peaks = localMaxima1d(pulsePred);
   var priority = <double>[];

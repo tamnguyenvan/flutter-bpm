@@ -108,6 +108,21 @@ Float32List imageToFloat32List(imglib.Image image) {
   return convertedBytes.buffer.asFloat32List();
 }
 
+List<int> imageToList(imglib.Image image) {
+  var convertedBytes = Int32List(1 * image.height * image.width * 3);
+  var buffer = Int32List.view(convertedBytes.buffer);
+  var pixelIndex = 0;
+  for (var i = 0; i < image.height; i++) {
+    for (var j = 0; j < image.width; j++) {
+      var pixel = image.getPixel(j, i);
+      buffer[pixelIndex++] = imglib.getRed(pixel);
+      buffer[pixelIndex++] = imglib.getGreen(pixel);
+      buffer[pixelIndex++] = imglib.getBlue(pixel);
+    }
+  }
+  return convertedBytes.buffer.asInt32List();
+}
+
 imglib.Image? convertCameraImage(CameraImage image, CameraLensDirection _dir) {
   imglib.Image? img;
   try {
