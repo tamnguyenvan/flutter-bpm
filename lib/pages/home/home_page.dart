@@ -16,9 +16,12 @@ import 'package:flutter_with_mediapipe/utils/face_utils.dart';
 import 'package:flutter_with_mediapipe/utils/image_utils.dart';
 import 'package:flutter_with_mediapipe/utils/isolate_utils.dart';
 import 'package:image/image.dart' as image_lib;
+import 'package:path_provider/path_provider.dart';
 import 'package:timer_count_down/timer_count_down.dart';
 import 'package:wakelock/wakelock.dart';
 import 'package:dotted_border/dotted_border.dart';
+// import 'package:path_provider_ex/path_provider_ex.dart';
+// import 'package:permission_handler/permission_handler.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({Key? key}) : super(key: key);
@@ -52,7 +55,7 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
 
   late bool _isRun;
   bool _predicting = false;
-  bool _draw = false;
+  // bool _draw = false;
 
   // Face detection
   var numEliminateFirstFrame = 20;
@@ -187,7 +190,8 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
     //   ),
     // );
     final rectDisplayWidth = screenSize.width / 2;
-    final rectDisplayHeight = screenSize.height / 3;
+    // final rectDisplayHeight = screenSize.height / 3;
+    final rectDisplayHeight = rectDisplayWidth;
     // final rectDisplayHeight = rectDisplayWidth;
     _cropRectWidthNorm = rectDisplayWidth / (screenSize.width * scale);
     _cropRectHeightNorm = _cropRectWidthNorm;
@@ -218,6 +222,10 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
 
   Future<void> _inference({required CameraImage cameraImage}) async {
     if (!mounted) return;
+
+    if (!_isRun) {
+      return;
+    }
 
     // if (_modelInferenceService.model.interpreter != null) {
     if (_bpmModelInferenceService.model.interpreter != null) {
@@ -252,10 +260,35 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
           _predicting = true;
         });
 
+        // // For debug only
+        // final decodedImages =
+        //     _inputBuffer.buffer.map((e) => e.decodedImage).toList();
+
+        // var buffer = StringBuffer();
+        // for (var img in decodedImages) {
+        //   for (var pix in img) {
+        //     buffer.write('${pix.toInt()} ');
+        //   }
+        //   buffer.write('\n');
+        // }
+        // final content = buffer.toString();
+        // // final storageInfo = await PathProviderEx.getStorageInfo();
+        // // final rootDir = storageInfo[0].rootDir;
+        // final extDirs = await getExternalStorageDirectories();
+        // final rootDir = extDirs![0].path;
+        // // final appDocumentsDir = await getApplicationDocumentsDirectory();
+        // final videoPath = '$rootDir/vid_${_inputBuffer.length}.txt';
+        // final file = File(videoPath);
+
+        // if (await Permission.storage.request().isGranted) {
+        //   await file.writeAsString(content);
+        //   print('============== Wrote file ok: $videoPath');
+        // }
+
         print('============ Start calculating bpm');
         print('============ FPS: ${_inputBuffer.fps}');
         final bpmParams = {
-          'inputs': _inputBuffer.buffer.map((e) => e.image).toList(),
+          'inputs': _inputBuffer.buffer.map((e) => e.decodedImage).toList(),
           'fps': _inputBuffer.fps,
           'bpmCalculatorAddress': _bpmModelInferenceService.model.getAddress,
         };
@@ -307,28 +340,28 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
             .update(InputData(results[0] as image_lib.Image, now.toDouble()));
 
         // for debug only
-        final cropRectWidth = _cropRectWidthNorm! * cameraImage.width;
-        final cropRectHeight = cropRectWidth;
-        setState(() {
-          // final rgb = image_lib.Image.fromBytes(
-          //   cropRectSize.toInt() % 2 == 1
-          //       ? cropRectSize.toInt() - 1
-          //       : cropRectSize.toInt(),
-          //   cropRectSize.toInt() % 2 == 1
-          //       ? cropRectSize.toInt() - 1
-          //       : cropRectSize.toInt(),
-          //   _inputBuffer.buffer.last.image,
-          // );
-          // print(
-          //     '========== rgb len: ${_inputBuffer.buffer.last.image.length} ${rgb.width} ${rgb.height}');
-          // _avatar = results[0] as image_lib.Image;
-          // _avatar = image_lib.copyResize(
-          //   rgb,
-          //   width: 36,
-          //   height: 36,
-          // );
-          // _avatar = rgb;
-        });
+        // final cropRectWidth = _cropRectWidthNorm! * cameraImage.width;
+        // final cropRectHeight = cropRectWidth;
+        // setState(() {
+        //   // final rgb = image_lib.Image.fromBytes(
+        //   //   cropRectSize.toInt() % 2 == 1
+        //   //       ? cropRectSize.toInt() - 1
+        //   //       : cropRectSize.toInt(),
+        //   //   cropRectSize.toInt() % 2 == 1
+        //   //       ? cropRectSize.toInt() - 1
+        //   //       : cropRectSize.toInt(),
+        //   //   _inputBuffer.buffer.last.image,
+        //   // );
+        //   // print(
+        //   //     '========== rgb len: ${_inputBuffer.buffer.last.image.length} ${rgb.width} ${rgb.height}');
+        //   // _avatar = results[0] as image_lib.Image;
+        //   // _avatar = image_lib.copyResize(
+        //   //   rgb,
+        //   //   width: 36,
+        //   //   height: 36,
+        //   // );
+        //   // _avatar = rgb;
+        // });
       }
     }
 
@@ -407,82 +440,106 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
   // void calcBpm(List<FaceDetectionDebugData> faceResults) async {}
 
   Widget _buildInfoBoard() {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.end,
-      children: [
-        const SizedBox(
-          height: 20,
-        ),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            // _buildAvatar(),
-            IconButton(
-              onPressed: () {
-                // TODO: Back to home screen
-                print('================== Exit!');
-              },
-              icon: const Icon(
-                Icons.exit_to_app_outlined,
+    if (_isRun) {
+      return Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          const SizedBox(
+            height: 20,
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              // _buildAvatar(),
+              IconButton(
+                onPressed: () {
+                  // TODO: Back to home screen
+                  print('================== Exit!');
+                },
+                icon: const Icon(
+                  Icons.exit_to_app_outlined,
+                ),
+              ),
+            ],
+          ),
+          const Spacer(),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildIndexCard(name: 'bpm', index: '${_bpm.toInt()}'),
+              _buildIndexCard(name: 'hrv', index: '${_hrv.toInt()}'),
+              _buildIndexCard(name: 'stress index', index: '${_si.toInt()}')
+            ],
+          ),
+          const SizedBox(
+            height: 10,
+          ),
+          Container(
+            width: 50,
+            height: 50,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.8),
+              shape: BoxShape.circle,
+            ),
+            // child: Center(
+            //   child: Text(
+            //     seconds.toString(),
+            //     style: const TextStyle(
+            //       fontSize: 18,
+            //     ),
+            //   ),
+            // ),
+            child: Center(
+              child: Countdown(
+                seconds: BpmCalculatorParam.maxSeconds,
+                interval: const Duration(seconds: 1),
+                build: (_, double time) {
+                  return Text(
+                    time.toInt().toString(),
+                    style: const TextStyle(fontSize: 18),
+                  );
+                },
+                onFinished: () async {
+                  await _cameraController?.stopImageStream();
+                  _isolateUtils.dispose();
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const SuccessView(),
+                    ),
+                  );
+                },
               ),
             ),
-          ],
-        ),
-        const Spacer(),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            _buildIndexCard(name: 'bpm', index: '${_bpm.toInt()}'),
-            _buildIndexCard(name: 'hrv', index: '${_hrv.toInt()}'),
-            _buildIndexCard(name: 'stress index', index: '${_si.toInt()}')
-          ],
-        ),
-        const SizedBox(
-          height: 10,
-        ),
-        Container(
-          width: 50,
-          height: 50,
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.8),
-            shape: BoxShape.circle,
           ),
-          // child: Center(
-          //   child: Text(
-          //     seconds.toString(),
-          //     style: const TextStyle(
-          //       fontSize: 18,
-          //     ),
-          //   ),
-          // ),
-          child: Center(
-            child: Countdown(
-              seconds: BpmCalculatorParam.maxSeconds,
-              interval: const Duration(seconds: 1),
-              build: (_, double time) {
-                return Text(
-                  time.toInt().toString(),
-                  style: const TextStyle(fontSize: 18),
-                );
+          const SizedBox(
+            height: 5,
+          ),
+        ],
+      );
+    } else {
+      return Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          Center(
+            child: FloatingActionButton(
+              backgroundColor: Colors.white,
+              onPressed: () {
+                setState(() {
+                  _isRun = true;
+                });
               },
-              onFinished: () async {
-                await _cameraController?.stopImageStream();
-                _isolateUtils.dispose();
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const SuccessView(),
-                  ),
-                );
-              },
+              elevation: 12,
+              foregroundColor: Colors.black,
+              child: const Icon(Icons.qr_code_scanner_outlined),
             ),
           ),
-        ),
-        const SizedBox(
-          height: 5,
-        ),
-      ],
-    );
+          const SizedBox(
+            height: 50,
+          )
+        ],
+      );
+    }
   }
 
   Widget _buildIndexCard({required String index, required String name}) {
@@ -518,23 +575,37 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
   }
 
   Widget _buildFaceRect(double rectDisplayHeight, double rectDisplayWidth) {
-    return Center(
-      child: DottedBorder(
-        color: Colors.white,
-        dashPattern: [6, 6],
-        borderType: BorderType.RRect,
-        strokeWidth: 3,
-        radius: const Radius.circular(12),
-        child: ClipRRect(
-          borderRadius: const BorderRadius.all(
-            Radius.circular(12),
-          ),
-          child: Container(
-            height: rectDisplayHeight,
-            width: rectDisplayWidth,
+    return Stack(
+      children: [
+        Center(
+          child: DottedBorder(
+            color: Colors.white,
+            dashPattern: [6, 6],
+            borderType: BorderType.RRect,
+            strokeWidth: 3,
+            radius: const Radius.circular(12),
+            child: ClipRRect(
+              borderRadius: const BorderRadius.all(
+                Radius.circular(12),
+              ),
+              child: Container(
+                height: rectDisplayHeight,
+                width: rectDisplayWidth,
+              ),
+            ),
           ),
         ),
-      ),
+        Center(
+          child: Container(
+            height: 5,
+            width: 5,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+            ),
+          ),
+        ),
+      ],
     );
   }
 

@@ -357,9 +357,12 @@ class BpmCalculator extends BpmAiModel {
       // si = 10 * si;
     }
 
-    bpm = math.min(math.max(bpm, bpmRange[0]), bpmRange[1]);
-    hrv = math.min(math.max(hrv, hrvRange[0]), hrvRange[1]);
-    si = math.min(math.max(si, siRange[0]), siRange[1]);
+    // bpm = math.min(math.max(bpm, bpmRange[0]), bpmRange[1]);
+    // hrv = math.min(math.max(hrv, hrvRange[0]), hrvRange[1]);
+    // si = math.min(math.max(si, siRange[0]), siRange[1]);
+    bpm = bpm.clamp(bpmRange[0], bpmRange[1]);
+    hrv = hrv.clamp(hrvRange[0], hrvRange[1]);
+    si = si.clamp(siRange[0], siRange[1]);
     return [bpm, hrv, si];
   }
 }

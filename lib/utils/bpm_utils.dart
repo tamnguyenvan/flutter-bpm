@@ -5,7 +5,7 @@ import 'package:flutter_with_mediapipe/utils/general.dart';
 import 'package:image/image.dart' as image_lib;
 
 class InputData {
-  late List<int> decodedImage;
+  late List<double> decodedImage;
   image_lib.Image image;
   double timestamp;
   InputData(this.image, this.timestamp) {
@@ -14,7 +14,7 @@ class InputData {
       width: BpmCalculatorParam.inputSize,
       height: BpmCalculatorParam.inputSize,
     );
-    decodedImage = imageToList(resizedImage);
+    decodedImage = imageToFloat32List(resizedImage);
   }
 }
 
@@ -41,9 +41,7 @@ class InputBuffer {
   }
 
   bool get ready {
-    var isRead = buffer.length == bufferSize;
-    // return buffer.length == bufferSize;
-    return isRead;
+    return buffer.length == bufferSize;
   }
 
   int get length {

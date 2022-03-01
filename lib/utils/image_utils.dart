@@ -82,21 +82,19 @@ class ImageUtils {
       cropRectTop -= 1;
     }
 
-    if (cropRectHeight % 2 == 1) {
-      cropRectHeight -= 1;
-    }
-
-    if (cropRectWidth % 2 == 1) {
-      cropRectWidth -= 1;
-    }
-
     // var croppedImgSize = (cropRectWidth * cropRectHeight * 1.5).floor();
     // var croppedImg = List<int>.filled(croppedImgSize, 0);
-    final bytes = Uint8List((cropRectWidth * cropRectHeight * 1.5).toInt());
+    final croppedImgYPlaneSize = cropRectWidth * cropRectHeight;
+    final uPlaneHeight = (cropRectHeight / 2.0).ceil();
+    final uPlaneWidth = (cropRectWidth / 2.0).ceil();
+    final uPlaneSize = uPlaneWidth * uPlaneHeight;
+    final vPlaneHeight = (cropRectHeight / 2.0).ceil();
+    final vPlaneWidth = (cropRectWidth / 2.0).ceil();
+    final vPlaneSize = vPlaneWidth * vPlaneHeight;
+    final bytes = Uint8List(croppedImgYPlaneSize + uPlaneSize + vPlaneSize);
 
     // Start points of UV plane
     // var imgYPlaneSize = (src.length / 1.5).ceil();
-    var croppedImgYPlaneSize = cropRectWidth * cropRectHeight;
     var imgYPlaneSize = plane0.length;
 
     // Y plane copy
@@ -117,9 +115,6 @@ class ImageUtils {
     }
 
     // U plane copy
-    final uPlaneHeight = (cropRectHeight / 2.0).ceil();
-    final uPlaneWidth = (cropRectWidth / 2.0).ceil();
-    final uPlaneSize = uPlaneHeight * uPlaneWidth;
     for (var i = 0; i < uPlaneHeight; i++) {
       var imgPos =
           (cropRectTop ~/ 2 + i) * (imgWidth ~/ 2) + (cropRectLeft ~/ 2);
@@ -139,8 +134,6 @@ class ImageUtils {
           bytes, croppedImgPos, plane1, imgPos, imgPos + uPlaneWidth);
     }
     // V plane copy
-    final vPlaneHeight = (cropRectHeight / 2.0).ceil();
-    final vPlaneWidth = (cropRectWidth / 2.0).ceil();
     for (var i = 0; i < vPlaneHeight; i++) {
       // print('=================== $i $yPlaneHeight ${plane2.length}');
       var imgPos =

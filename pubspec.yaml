@@ -36,6 +36,9 @@ dependencies:
   google_ml_vision:
   wakelock: 0.5.5
   dotted_border:
+  path_provider:
+  # path_provider_ex:
+  # permission_handler:
 
 dev_dependencies:
   flutter_test:
