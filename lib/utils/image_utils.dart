@@ -20,8 +20,8 @@ class ImageUtils {
         cropRect,
       );
       stopwatch.stop();
-      print(
-          '================== _crop yuv time: ${stopwatch.elapsedMilliseconds}ms');
+      // print(
+      //     '================== _crop yuv time: ${stopwatch.elapsedMilliseconds}ms');
 
       stopwatch.start();
       final ret = _convertYUV420ToRGBImageBytesList(
@@ -35,8 +35,8 @@ class ImageUtils {
         cropRect.height.toInt(),
       );
       stopwatch.stop();
-      print(
-          '================= to image bytes list time: ${stopwatch.elapsedMilliseconds}');
+      // print(
+      //     '================= to image bytes list time: ${stopwatch.elapsedMilliseconds}');
       return ret;
     } else {
       return [cameraImage.planes[0].bytes.toList()];

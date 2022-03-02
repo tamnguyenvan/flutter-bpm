@@ -248,13 +248,13 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
         // }
         if (numEliminateFirstFrame > 0) {
           numEliminateFirstFrame--;
-          print('============ Eliminating a frame');
+          // print('============ Eliminating a frame');
           return;
         }
       }
 
       // if (_rawInputBuffer.ready) {
-      print('========== buffer len.: ${_inputBuffer.length}');
+      // print('========== buffer len.: ${_inputBuffer.length}');
       if (_inputBuffer.ready) {
         setState(() {
           _predicting = true;
@@ -285,8 +285,8 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
         //   print('============== Wrote file ok: $videoPath');
         // }
 
-        print('============ Start calculating bpm');
-        print('============ FPS: ${_inputBuffer.fps}');
+        // print('============ Start calculating bpm');
+        // print('============ FPS: ${_inputBuffer.fps}');
         final bpmParams = {
           'inputs': _inputBuffer.buffer.map((e) => e.decodedImage).toList(),
           'fps': _inputBuffer.fps,
@@ -297,7 +297,7 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
           params: bpmParams,
         );
         final bpmResults = _bpmModelInferenceService.bpmResults;
-        print('============ bpm: $bpmResults');
+        // print('============ bpm: $bpmResults');
         if (bpmResults != null) {
           _avg.update(bpmResults);
           setState(() {
@@ -306,7 +306,7 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
             _si = _avg.si;
           });
         }
-        print('============ Stop calculating bpm');
+        // print('============ Stop calculating bpm');
 
         setState(() {
           _predicting = false;
@@ -333,8 +333,8 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
           ),
         );
         stopwatch.stop();
-        print(
-            '================= Crop time: ${stopwatch.elapsedMilliseconds}ms');
+        // print(
+        //     '================= Crop time: ${stopwatch.elapsedMilliseconds}ms');
         final now = DateTime.now().millisecondsSinceEpoch;
         _inputBuffer
             .update(InputData(results[0] as image_lib.Image, now.toDouble()));
