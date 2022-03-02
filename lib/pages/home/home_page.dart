@@ -107,7 +107,9 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
 
   Future<void> _initCamera() async {
     _cameras = await availableCameras();
-    _cameraDescription = _cameras[1];
+    _cameraDescription = _cameras.firstWhere(
+      (camera) => camera.lensDirection == CameraLensDirection.front,
+    );
     _isRun = false;
     _onNewCameraSelected(_cameraDescription);
   }
