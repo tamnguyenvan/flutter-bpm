@@ -39,7 +39,13 @@ class ImageUtils {
       //     '================= to image bytes list time: ${stopwatch.elapsedMilliseconds}');
       return ret;
     } else {
-      return [cameraImage.planes[0].bytes.toList()];
+      final croppedImageBytes = _cropBGRA8888(cameraImage, cropRect);
+      final image = _convertRGBAToImage(
+        croppedImageBytes,
+        cropRect.width.toInt(),
+        cropRect.height.toInt(),
+      );
+      return [image, croppedImageBytes];
     }
   }
   // /// Converts a [CameraImage] in YUV420 format to [Image] in RGB format
@@ -53,13 +59,49 @@ class ImageUtils {
   //   }
   // }
 
+  static Uint8List _cropBGRA8888(CameraImage cameraImage, Rect cropRect) {
+    var cropRectWidth = cropRect.width.toInt();
+    var cropRectHeight = cropRect.height.toInt();
+    var cropRectTop = cropRect.top.toInt();
+    var cropRectLeft = cropRect.left.toInt();
+
+    // Crop
+    final imgWidth = cameraImage.planes[0].width!;
+    final bytes = cameraImage.planes[0].bytes;
+    var croppedImageBytes = Uint8List(cropRectWidth * cropRectHeight * 4);
+    for (var i = 0; i < cropRectHeight; i++) {
+      var imgPos =
+          4 * (cropRectTop + i) * imgWidth + cropRectLeft; // 4 each pixel
+      var croppedImgPos = 4 * i * cropRectWidth;
+      List.copyRange(
+        croppedImageBytes,
+        croppedImgPos,
+        bytes,
+        imgPos,
+        imgPos + cropRectWidth * 4,
+      );
+    }
+
+    final rgbaBytes = Uint8List(cropRectWidth * cropRectHeight * 4);
+    for (var i = 0; i < cropRectWidth * cropRectHeight; i++) {
+      var srcPixel = croppedImageBytes.sublist(i * 4, (i + 1) * 4);
+      // Swap r and b
+      final tmp = srcPixel[0];
+      srcPixel[0] = srcPixel[2];
+      srcPixel[2] = tmp;
+      List.copyRange(rgbaBytes, i * 4, srcPixel, 0, 4);
+    }
+    return rgbaBytes;
+  }
+
   // /// Converts a [CameraImage] in BGRA888 format to [Image] in RGB format
-  static image_lib.Image _convertBGRA8888ToImage(CameraImage cameraImage) {
+  static image_lib.Image _convertRGBAToImage(
+      Uint8List bytes, int width, int height) {
     var img = image_lib.Image.fromBytes(
-      cameraImage.planes[0].width!,
-      cameraImage.planes[0].height!,
-      cameraImage.planes[0].bytes,
-      format: image_lib.Format.bgra,
+      width,
+      height,
+      bytes,
+      format: image_lib.Format.rgba,
     );
     return img;
   }
@@ -274,6 +316,5 @@ class ImageUtils {
     // return 0xff000000 |
     //     ((b << 16) & 0xff0000) |
     //     ((g << 8) & 0xff00) |
-    //     (r & 0xff);
   }
 }
