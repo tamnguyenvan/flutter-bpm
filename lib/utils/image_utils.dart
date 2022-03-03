@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui';
 import 'dart:math' as math;
@@ -29,8 +30,9 @@ class ImageUtils {
         planes[1],
         planes[2],
         // cameraImage.planes[1].bytesPerRow,
-        (cropRect.width / 2).floor(),
-        cameraImage.planes[1].bytesPerPixel!,
+        (cropRect.width.toInt() / 2.0).ceil(),
+        // cameraImage.planes[1].bytesPerPixel!,
+        1,
         cropRect.width.toInt(),
         cropRect.height.toInt(),
       );
@@ -107,6 +109,15 @@ class ImageUtils {
   }
 
   static List<Uint8List> _cropYUV420(CameraImage cameraImage, Rect cropRect) {
+    if (Platform.isAndroid) {
+      return _cropYUV420Android(cameraImage, cropRect);
+    } else {
+      return _cropYUV420IOS(cameraImage, cropRect);
+    }
+  }
+
+  static List<Uint8List> _cropYUV420Android(
+      CameraImage cameraImage, Rect cropRect) {
     final plane0 = cameraImage.planes[0].bytes;
     final plane1 = cameraImage.planes[1].bytes;
     final plane2 = cameraImage.planes[2].bytes;
@@ -126,20 +137,21 @@ class ImageUtils {
 
     // var croppedImgSize = (cropRectWidth * cropRectHeight * 1.5).floor();
     // var croppedImg = List<int>.filled(croppedImgSize, 0);
-    final croppedImgYPlaneSize = cropRectWidth * cropRectHeight;
+    final yPlaneSize = cropRectWidth * cropRectHeight;
     final uPlaneHeight = (cropRectHeight / 2.0).ceil();
     final uPlaneWidth = (cropRectWidth / 2.0).ceil();
     final uPlaneSize = uPlaneWidth * uPlaneHeight;
     final vPlaneHeight = (cropRectHeight / 2.0).ceil();
     final vPlaneWidth = (cropRectWidth / 2.0).ceil();
     final vPlaneSize = vPlaneWidth * vPlaneHeight;
-    final bytes = Uint8List(croppedImgYPlaneSize + uPlaneSize + vPlaneSize);
+    // final bytes = Uint8List(croppedImgYPlaneSize + uPlaneSize + vPlaneSize);
 
     // Start points of UV plane
     // var imgYPlaneSize = (src.length / 1.5).ceil();
     var imgYPlaneSize = plane0.length;
 
     // Y plane copy
+    var outPlane0 = Uint8List(yPlaneSize);
     for (var i = 0; i < cropRectHeight; i++) {
       var imgPos = (cropRectTop + i) * imgWidth + cropRectLeft;
       var croppedImgPos = i * cropRectWidth;
@@ -153,14 +165,15 @@ class ImageUtils {
       // );
       // bytes.putUint8List(plane0.sublist(imgPos, imgPos + cropRectWidth));
       List.copyRange(
-          bytes, croppedImgPos, plane0, imgPos, imgPos + cropRectWidth);
+          outPlane0, croppedImgPos, plane0, imgPos, imgPos + cropRectWidth);
     }
 
     // U plane copy
+    var outPlane1 = Uint8List(uPlaneSize);
     for (var i = 0; i < uPlaneHeight; i++) {
       var imgPos =
           (cropRectTop ~/ 2 + i) * (imgWidth ~/ 2) + (cropRectLeft ~/ 2);
-      var croppedImgPos = croppedImgYPlaneSize + (i * uPlaneWidth);
+      var croppedImgPos = i * uPlaneWidth;
       // System.arraycopy(
       //     img, imgPos, croppedImg, croppedImgPos, cropRect.width());
       // List.copyRange(
@@ -173,9 +186,11 @@ class ImageUtils {
 
       // bytes.putUint8List(plane1.sublist(imgPos, imgPos + uPlaneWidth));
       List.copyRange(
-          bytes, croppedImgPos, plane1, imgPos, imgPos + uPlaneWidth);
+          outPlane1, croppedImgPos, plane1, imgPos, imgPos + uPlaneWidth);
     }
+
     // V plane copy
+    var outPlane2 = Uint8List(vPlaneSize);
     for (var i = 0; i < vPlaneHeight; i++) {
       // print('=================== $i $yPlaneHeight ${plane2.length}');
       var imgPos =
@@ -183,20 +198,78 @@ class ImageUtils {
 
       // bytes.putUint8List(plane2.sublist(imgPos, imgPos + yPlaneWidth));
 
-      var croppedImgPos = croppedImgYPlaneSize + uPlaneSize + (i * vPlaneWidth);
+      // var croppedImgPos = croppedImgYPlaneSize + uPlaneSize + (i * vPlaneWidth);
+      var croppedImgPos = i * vPlaneWidth;
       // print(
       //     '======= imgPos $imgPos crop Pos $croppedImgPos width $cropRectWidth bytes size ${bytes.length} $croppedImgYPlaneSize $uPlaneSize');
       List.copyRange(
-          bytes, croppedImgPos, plane2, imgPos, imgPos + vPlaneWidth);
+          outPlane2, croppedImgPos, plane2, imgPos, imgPos + vPlaneWidth);
     }
     // print('============== ok');
-    final retPlane0 = bytes.sublist(0, croppedImgYPlaneSize);
-    final retPlane1 =
-        bytes.sublist(croppedImgYPlaneSize, croppedImgYPlaneSize + uPlaneSize);
-    final retPlane2 = bytes.sublist(croppedImgYPlaneSize + uPlaneSize);
+    // final retPlane0 = bytes.sublist(0, croppedImgYPlaneSize);
+    // final retPlane1 =
+    //     bytes.sublist(croppedImgYPlaneSize, croppedImgYPlaneSize + uPlaneSize);
+    // final retPlane2 = bytes.sublist(croppedImgYPlaneSize + uPlaneSize);
 
     // final planes = bytes.done().buffer.asUint8List();
-    return [retPlane0, retPlane1, retPlane2];
+    // return [retPlane0, retPlane1, retPlane2];
+    return [outPlane0, outPlane1, outPlane2];
+  }
+
+  static List<Uint8List> _cropYUV420IOS(
+      CameraImage cameraImage, Rect cropRect) {
+    final plane0 = cameraImage.planes[0].bytes; // y plane
+    final plane1 = cameraImage.planes[1].bytes; // uv plane
+    final imgWidth = cameraImage.width.toInt();
+
+    // 1.5 mean 1.0 for Y and 0.25 each for U and V
+    var cropRectWidth = cropRect.width.toInt();
+    var cropRectHeight = cropRect.height.toInt();
+    var cropRectTop = cropRect.top.toInt();
+    var cropRectLeft = cropRect.left.toInt();
+    if (cropRectLeft % 2 == 1) {
+      cropRectLeft -= 1;
+    }
+    if (cropRectTop % 2 == 1) {
+      cropRectTop -= 1;
+    }
+
+    // var croppedImgSize = (cropRectWidth * cropRectHeight * 1.5).floor();
+    // var croppedImg = List<int>.filled(croppedImgSize, 0);
+    final yPlaneSize = cropRectWidth * cropRectHeight;
+    final uPlaneHeight = (cropRectHeight / 2.0).ceil();
+    final uPlaneWidth = (cropRectWidth / 2.0).ceil();
+    final uPlaneSize = uPlaneWidth * uPlaneHeight;
+    final vPlaneHeight = (cropRectHeight / 2.0).ceil();
+    final vPlaneWidth = (cropRectWidth / 2.0).ceil();
+    final vPlaneSize = vPlaneWidth * vPlaneHeight;
+    var outPlane0 = Uint8List(yPlaneSize);
+
+    // Y plane copy
+    for (var i = 0; i < cropRectHeight; i++) {
+      var imgPos = (cropRectTop + i) * imgWidth + cropRectLeft;
+      var croppedImgPos = i * cropRectWidth;
+      List.copyRange(
+          outPlane0, croppedImgPos, plane0, imgPos, imgPos + cropRectWidth);
+    }
+
+    // UV plane copy
+    var outPlane1 = Uint8List(uPlaneSize);
+    var outPlane2 = Uint8List(vPlaneSize);
+    final index1 = List.generate(uPlaneWidth, (index) => index * 2);
+    final index2 = List.generate(vPlaneWidth, (index) => index * 2 + 1);
+    for (var i = 0; i < uPlaneHeight; i++) {
+      // Get the uv row
+      var imgPos = (cropRectTop ~/ 2 + i) * imgWidth + cropRectLeft;
+      final uvRow = plane1.sublist(imgPos, imgPos + cropRectWidth);
+      final uRow = index1.map((idx) => uvRow[idx]).toList();
+      final vRow = index2.map((idx) => uvRow[idx]).toList();
+
+      List.copyRange(outPlane1, i * uPlaneWidth, uRow, 0, uPlaneWidth);
+      List.copyRange(outPlane2, i * vPlaneWidth, vRow, 0, vPlaneWidth);
+    }
+
+    return [outPlane0, outPlane1, outPlane2];
   }
 
   /// Converts a [CameraImage] in YUV420 format to [Image] in RGB format
