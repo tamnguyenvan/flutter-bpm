@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 
 import 'package:camera/camera.dart';
 import 'package:flutter_with_mediapipe/constants/model.dart';
-import 'package:flutter_with_mediapipe/pages/home/widgets/face_box_painter.dart';
+// import 'package:flutter_with_mediapipe/pages/home/widgets/face_box_painter.dart';
 import 'package:flutter_with_mediapipe/pages/success/success_view.dart';
 import 'package:flutter_with_mediapipe/services/model_inference_service.dart';
 import 'package:flutter_with_mediapipe/services/service_locator.dart';

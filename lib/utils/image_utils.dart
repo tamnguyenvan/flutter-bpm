@@ -109,14 +109,17 @@ class ImageUtils {
   }
 
   static List<Uint8List> _cropYUV420(CameraImage cameraImage, Rect cropRect) {
-    if (Platform.isAndroid) {
-      return _cropYUV420Android(cameraImage, cropRect);
+    if (cameraImage.planes[1].bytesPerPixel == 1) {
+      return _cropYUVTriPlanar(cameraImage, cropRect);
+    } else if (cameraImage.planes[1].bytesPerPixel == 2) {
+      return _cropYUVBiPlanar(cameraImage, cropRect);
     } else {
-      return _cropYUV420IOS(cameraImage, cropRect);
+      // return _cropYUVBiPlanar(cameraImage, cropRect);
+      throw Exception('Not supported format');
     }
   }
 
-  static List<Uint8List> _cropYUV420Android(
+  static List<Uint8List> _cropYUVTriPlanar(
       CameraImage cameraImage, Rect cropRect) {
     final plane0 = cameraImage.planes[0].bytes;
     final plane1 = cameraImage.planes[1].bytes;
@@ -216,7 +219,7 @@ class ImageUtils {
     return [outPlane0, outPlane1, outPlane2];
   }
 
-  static List<Uint8List> _cropYUV420IOS(
+  static List<Uint8List> _cropYUVBiPlanar(
       CameraImage cameraImage, Rect cropRect) {
     final plane0 = cameraImage.planes[0].bytes; // y plane
     final plane1 = cameraImage.planes[1].bytes; // uv plane
